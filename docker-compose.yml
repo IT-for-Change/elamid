@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  elamid:
+    image: elamid
+    build: .
+    container_name: elamid
+    ports:
+      - "5000:5000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: always
+
