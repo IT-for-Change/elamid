@@ -56,7 +56,7 @@ def run():
             raise ElamidError(f"Unable to find image {image_name}")
 
         try:
-            container_name = 'elastt_container'
+            container_name = 'myelaai'
             try:
                 container = client.containers.get(container_name)
                 if container.status == "running":
