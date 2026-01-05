@@ -15,32 +15,25 @@ class ElamidError(Exception):
 @app.route("/run", methods=["GET"])
 def run():
     image_name = request.args.get("ela_image")
-    ela_host = request.args.get("ela_api_host")
-    ela_port = request.args.get("ela_api_port")
-    ela_api = request.args.get("ela_api")
-    ela_activity = request.args.get("ela_activity")
-    ela_ai_install_dir = request.args.get("ela_ai_install_dir")
-    ela_ai_operation = request.args.get("ela_ai_operation")
+    container_env_config = {
+        "ela_host": request.args.get("ela_api_host"),
+        "ela_port": request.args.get("ela_api_port"),
+        "ela_api": request.args.get("ela_api"),
+        "ela_api_token": request.args.get("ela_api_token"),
+        "ela_activity": request.args.get("ela_activity"),
+        "ela_ai_install_dir": request.args.get("ela_ai_install_dir"),
+        "ela_ai_operation": request.args.get("ela_ai_operation")
+    }
 
-    command = f"/apps/{ela_ai_operation}/app.py {ela_host} {ela_port} {ela_api} {ela_activity}"
+    environment = {
+        "APP_CONFIG": json.dumps(container_env_config)
+    }
+
+    command = f"/apps/{ela_ai_operation}/app.py"
     volumes = {
         f'{ela_ai_install_dir}/apps': {'bind': '/apps', 'mode': 'rw'}
     }
     network = 'host'
-
-    APP_ENV = ''
-    if ela_ai_operation in ["lang_check", "stt"]:
-        APP_ENV = "whisper"
-    elif ela_ai_operation == "sdz":
-        APP_ENV = "pyannote"
-    elif ela_ai_operation == "nlp":
-        APP_ENV = "spacy"
-    elif ela_ai_operation == "report":
-        APP_ENV = "report"
-
-    environment = {
-        "APP_ENV": APP_ENV
-    }
 
     try:
         try:
