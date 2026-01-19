@@ -1,8 +1,13 @@
 from flask import Flask, request, Response
 import docker
 from docker.errors import DockerException, ImageNotFound, ContainerError, NotFound
+import json
+from loguru import logger
 
 app = Flask(__name__)
+
+logger.add("/workspace/elamid.log", level="DEBUG",
+           rotation="10 MB", compression="zip")
 
 
 class ElamidError(Exception):
@@ -14,29 +19,45 @@ class ElamidError(Exception):
 
 @app.route("/run", methods=["GET"])
 def run():
+    logger.info('Starting /run')
     image_name = request.args.get("ela_image")
+    ela_api_host = request.args.get("ela_api_host")
+    ela_api_port = request.args.get("ela_api_port")
+    ela_get_api = request.args.get("ela_get_api")
+    ela_put_api = request.args.get("ela_put_api")
+    ela_add_file_api = request.args.get("ela_add_file_api")
+    ela_api_token = request.args.get("ela_api_token")
+    ela_ai_install_dir = request.args.get("ela_ai_install_dir")
+    ela_ai_operation = request.args.get("ela_ai_operation")
+    ela_activity = request.args.get("ela_activity")
+
     container_env_config = {
-        "ela_host": request.args.get("ela_api_host"),
-        "ela_port": request.args.get("ela_api_port"),
-        "ela_api": request.args.get("ela_api"),
-        "ela_api_token": request.args.get("ela_api_token"),
-        "ela_activity": request.args.get("ela_activity"),
-        "ela_ai_install_dir": request.args.get("ela_ai_install_dir"),
-        "ela_ai_operation": request.args.get("ela_ai_operation")
+        "ela_api_host": ela_api_host,
+        "ela_api_port": ela_api_port,
+        "ela_get_api": ela_get_api,
+        "ela_put_api": ela_put_api,
+        "ela_add_file_api": ela_add_file_api,
+        "ela_api_token": ela_api_token,
+        "ela_ai_install_dir": ela_ai_install_dir,
+        "ela_ai_operation": ela_ai_operation
     }
 
     environment = {
         "APP_CONFIG": json.dumps(container_env_config)
     }
 
-    command = f"/apps/{ela_ai_operation}/app.py"
+    # command = f"/apps/{ela_ai_operation}/app.py"
     volumes = {
         f'{ela_ai_install_dir}/apps': {'bind': '/apps', 'mode': 'rw'}
     }
+    command = f'-m {ela_ai_operation}.app {ela_activity}'
+    # command = f'app.py {ela_activity}'
+    working_dir = '/apps'
     network = 'host'
 
     try:
         try:
+            logger.info('Creating docker client')
             # Explicitly use Docker unix socket
             client = docker.DockerClient(
                 base_url="unix:///var/run/docker.sock")
@@ -51,20 +72,25 @@ def run():
         try:
             container_name = 'myelaai'
             try:
+                logger.info(f'Getting container {container_name}')
                 container = client.containers.get(container_name)
                 if container.status == "running":
-                    print(f"Stopping container {container.name}...")
+                    logger.info(
+                        f"Container {container.name} is alreay running. Stopping now...")
                     container.stop()  # Sends SIGTERM, waits 10s, then SIGKILL
 
                 # Remove the container
                 container.remove(force=True)
-                print(f"Container {container.name} removed successfully.")
+                logger.info(
+                    f"Container {container.name} removed successfully.")
             except NotFound:
                 pass
 
+            logger.info('Running new container')
             container = client.containers.run(
                 image_name,
-                command,
+                working_dir=working_dir,
+                command=command,
                 volumes=volumes,
                 network=network,
                 environment=environment,
@@ -74,11 +100,14 @@ def run():
                 stderr=True,
                 stdout=True
             )
-        except Exception as e:
-            raise ElamidError(
-                f"Unable to run container {container_name} for image {image_name} with command: {command}.")
+            logger.info(f'Container {container_name} started successfully')
 
-        return Response("Assessment started successfully",
+        except Exception as e:
+            msg = f"Unable to run container {container_name} for image {image_name} with command: {command}."
+            logger.error(msg)
+            raise ElamidError(msg)
+
+        return Response("Assessment started successfully. Use the refresh button to check progress",
                         status=200,
                         mimetype="text/plain")
 
